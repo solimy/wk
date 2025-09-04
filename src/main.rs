@@ -157,7 +157,11 @@ fn info_tasks(connection: &sqlite::Connection, period: &InfoPeriod) {
                 ((duration % 86400) / 3600) || 'h ' ||
                 ((duration % 3600) / 60) || 'm ' ||
                 (duration % 60) || 's' AS human_duration,
-                RANK() OVER (ORDER BY duration DESC) AS rank
+                RANK() OVER (ORDER BY duration DESC) AS rank,
+                COALESCE(
+                    printf('%.0f%%', 100.0 * duration / NULLIF(SUM(duration) OVER (), 0)),
+                    '0%%'
+                ) AS pct
             FROM (
                 SELECT tasks.name,
                     SUM(COALESCE(runs.end_time, strftime('%s','now')) - runs.start_time) AS duration
@@ -174,22 +178,15 @@ fn info_tasks(connection: &sqlite::Connection, period: &InfoPeriod) {
             let name: String = statement.read(0).unwrap();
             let duration: String = statement.read(1).unwrap();
             let rank: i64 = statement.read(2).unwrap();
-            println!("\t{}. {}: {}", rank, name, duration);
+            let pct: String = statement.read(3).unwrap();
+            println!("\t{}. {}: {} ({})", rank, name, duration, pct);
         }
     }
 
     match period {
-        InfoPeriod::Day => {
-            run(connection, "day", "strftime('%s','now','start of day')");
-        }
-        InfoPeriod::Week => {
-            run(connection, "week", "strftime('%s','now','start of day','-6 days')");
-        }
-        InfoPeriod::Month => {
-            run(connection, "month", "strftime('%s','now','start of month')");
-        }
-        InfoPeriod::Year => {
-            run(connection, "year", "strftime('%s','now','start of year')");
-        }
+        InfoPeriod::Day => run(connection, "day", "strftime('%s','now','start of day')"),
+        InfoPeriod::Week => run(connection, "week", "strftime('%s','now','start of day','-6 days')"),
+        InfoPeriod::Month => run(connection, "month", "strftime('%s','now','start of month')"),
+        InfoPeriod::Year => run(connection, "year", "strftime('%s','now','start of year')"),
     }
 }
