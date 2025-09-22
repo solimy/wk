@@ -161,10 +161,12 @@ fn info_tasks(connection: &sqlite::Connection, period: &InfoPeriod) {
                 COALESCE(
                     printf('%.0f%%', 100.0 * duration / NULLIF(SUM(duration) OVER (), 0)),
                     '0%%'
-                ) AS pct
+                ) AS pct,
+                ongoing
             FROM (
                 SELECT tasks.name,
-                    SUM(COALESCE(runs.end_time, strftime('%s','now')) - runs.start_time) AS duration
+                    SUM(COALESCE(runs.end_time, strftime('%s','now')) - runs.start_time) AS duration,
+                    SUM(runs.end_time IS NULL) AS ongoing
                 FROM tasks
                 LEFT JOIN runs ON tasks.id = runs.task_id
                 WHERE runs.start_time >= {start_expr}
@@ -179,7 +181,12 @@ fn info_tasks(connection: &sqlite::Connection, period: &InfoPeriod) {
             let duration: String = statement.read(1).unwrap();
             let rank: i64 = statement.read(2).unwrap();
             let pct: String = statement.read(3).unwrap();
-            println!("\t{}. {}: {} ({})", rank, name, duration, pct);
+            let ongoing: i64 = statement.read(4).unwrap();
+            print!("\t{}. {}: {} ({})", rank, name, duration, pct);
+            if ongoing != 0 {
+                print!(" [ongoing]"); 
+            }
+            println!();
         }
     }
 
